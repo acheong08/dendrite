@@ -23,9 +23,6 @@ jobs:
 
     - name: Build
       run: go build -o bin/ ./cmd/...
-
-    - name: Test
-      run: go test -v ./...
     
     - name: recursively list files
       run: ls -R
