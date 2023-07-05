@@ -478,6 +478,9 @@ func (r *Queryer) QueryServerJoinedToRoom(
 	if err != nil {
 		return fmt.Errorf("r.DB.RoomInfo: %w", err)
 	}
+	if info != nil {
+		response.RoomVersion = info.RoomVersion
+	}
 	if info == nil || info.IsStub() {
 		return nil
 	}
@@ -934,7 +937,7 @@ func (r *Queryer) QueryRoomInfo(ctx context.Context, roomID spec.RoomID) (*types
 }
 
 func (r *Queryer) CurrentStateEvent(ctx context.Context, roomID spec.RoomID, eventType string, stateKey string) (gomatrixserverlib.PDU, error) {
-	res, err := r.DB.GetStateEvent(ctx, roomID.String(), eventType, "")
+	res, err := r.DB.GetStateEvent(ctx, roomID.String(), eventType, stateKey)
 	if res == nil {
 		return nil, err
 	}
