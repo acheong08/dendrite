@@ -32,6 +32,7 @@ import (
 	"github.com/matrix-org/dendrite/syncapi/synctypes"
 
 	"github.com/matrix-org/dendrite/clientapi/auth/authtypes"
+	fsAPI "github.com/matrix-org/dendrite/federationapi/api"
 	"github.com/matrix-org/dendrite/internal/caching"
 	"github.com/matrix-org/dendrite/roomserver/acls"
 	"github.com/matrix-org/dendrite/roomserver/api"
@@ -47,6 +48,7 @@ type Queryer struct {
 	IsLocalServerName func(spec.ServerName) bool
 	ServerACLs        *acls.ServerACLs
 	Cfg               *config.Dendrite
+	FSAPI             fsAPI.RoomserverFederationAPI
 }
 
 func (r *Queryer) RestrictedRoomJoinInfo(ctx context.Context, roomID spec.RoomID, senderID spec.SenderID, localServerName spec.ServerName) (*gomatrixserverlib.RestrictedRoomJoinInfo, error) {
@@ -281,7 +283,7 @@ func (r *Queryer) QueryMembershipForUser(
 		return err
 	}
 
-	return r.QueryMembershipForSenderID(ctx, *roomID, senderID, response)
+	return r.QueryMembershipForSenderID(ctx, *roomID, *senderID, response)
 }
 
 // QueryMembershipAtEvent returns the known memberships at a given event.
@@ -974,6 +976,20 @@ func (r *Queryer) LocallyJoinedUsers(ctx context.Context, roomVersion gomatrixse
 	return joinedUsers, nil
 }
 
+func (r *Queryer) JoinedUserCount(ctx context.Context, roomID string) (int, error) {
+	info, err := r.DB.RoomInfo(ctx, roomID)
+	if err != nil {
+		return 0, err
+	}
+	if info == nil {
+		return 0, nil
+	}
+
+	// TODO: this can be further optimised by just using a SELECT COUNT query
+	nids, err := r.DB.GetMembershipEventNIDsForRoom(ctx, info.RoomNID, true, false)
+	return len(nids), err
+}
+
 // nolint:gocyclo
 func (r *Queryer) QueryRestrictedJoinAllowed(ctx context.Context, roomID spec.RoomID, senderID spec.SenderID) (string, error) {
 	// Look up if we know anything about the room. If it doesn't exist
@@ -993,21 +1009,26 @@ func (r *Queryer) QueryRestrictedJoinAllowed(ctx context.Context, roomID spec.Ro
 	return verImpl.CheckRestrictedJoin(ctx, r.Cfg.Global.ServerName, &api.JoinRoomQuerier{Roomserver: r}, roomID, senderID)
 }
 
-func (r *Queryer) QuerySenderIDForUser(ctx context.Context, roomID spec.RoomID, userID spec.UserID) (spec.SenderID, error) {
+func (r *Queryer) QuerySenderIDForUser(ctx context.Context, roomID spec.RoomID, userID spec.UserID) (*spec.SenderID, error) {
 	version, err := r.DB.GetRoomVersion(ctx, roomID.String())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	switch version {
 	case gomatrixserverlib.RoomVersionPseudoIDs:
 		key, err := r.DB.SelectUserRoomPublicKey(ctx, userID, roomID)
 		if err != nil {
-			return "", err
+			return nil, err
+		} else if key == nil {
+			return nil, nil
+		} else {
+			senderID := spec.SenderID(spec.Base64Bytes(key).Encode())
+			return &senderID, nil
 		}
-		return spec.SenderID(spec.Base64Bytes(key).Encode()), nil
 	default:
-		return spec.SenderID(userID.String()), nil
+		senderID := spec.SenderID(userID.String())
+		return &senderID, nil
 	}
 }
 
