@@ -26,7 +26,7 @@ jobs:
     
     - name: Create Release Artifact
       run: |
-        zip -r "dendrite-linux-amd64-${{ github.ref }}.zip" bin/*
+        zip -r "dendrite-linux-amd64-${{ github.ref_path }}.zip" bin/*
     
     - name: Get existing release body
       id: get_release_body
@@ -36,7 +36,7 @@ jobs:
     - name: Upload release artifact
       uses: svenstaro/upload-release-action@v2
       with:
-        file: dendrite-linux-amd64-${{ github.ref }}.zip
+        file: dendrite-linux-amd64-${{ github.ref_path }}.zip
         tag: ${{ github.ref }}
         body: |
           ${{ steps.get_release_body.outputs.body }}
