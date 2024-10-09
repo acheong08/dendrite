@@ -28,13 +28,13 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/atomic"
 
 	"github.com/gorilla/mux"
 	"github.com/kardianos/minwinsvc"
@@ -52,6 +52,7 @@ var staticContent embed.FS
 
 //go:embed static/client/login
 var loginFallback embed.FS
+var StaticContent = staticContent
 
 const HTTPServerTimeout = time.Minute * 5
 
@@ -235,7 +236,6 @@ func SetupAndServeHTTP(
 							logrus.WithError(err).Fatal("failed to serve unix socket")
 						}
 					}
-
 				} else {
 					if err := externalServ.ListenAndServe(); err != nil {
 						if err != http.ErrServerClosed {
